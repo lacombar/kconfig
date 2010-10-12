@@ -2,136 +2,15 @@
 # Kernel configuration targets
 # These targets are used from top-level makefile
 
-PHONY += oldconfig xconfig gconfig menuconfig config silentoldconfig update-po-config \
-	localmodconfig localyesconfig
-
-ifdef KBUILD_KCONFIG
-Kconfig := $(KBUILD_KCONFIG)
-else
-Kconfig := arch/$(SRCARCH)/Kconfig
-endif
+PHONY += oldconfig xconfig gconfig menuconfig config
 
 xconfig: $(obj)/qconf
-	$< $(Kconfig)
 
 gconfig: $(obj)/gconf
-	$< $(Kconfig)
 
 menuconfig: $(obj)/mconf
-	$< $(Kconfig)
 
 config: $(obj)/conf
-	$< $(Kconfig)
-
-oldconfig: $(obj)/conf
-	$< -o $(Kconfig)
-
-silentoldconfig: $(obj)/conf
-	$(Q)mkdir -p include/generated
-	$< -s $(Kconfig)
-
-# if no path is given, then use src directory to find file
-ifdef LSMOD
-LSMOD_F := $(LSMOD)
-ifeq ($(findstring /,$(LSMOD)),)
-  LSMOD_F := $(objtree)/$(LSMOD)
-endif
-endif
-
-localmodconfig: $(obj)/streamline_config.pl $(obj)/conf
-	$(Q)mkdir -p include/generated
-	$(Q)perl $< $(srctree) $(Kconfig) $(LSMOD_F) > .tmp.config
-	$(Q)if [ -f .config ]; then 				\
-			cmp -s .tmp.config .config ||		\
-			(mv -f .config .config.old.1;		\
-			 mv -f .tmp.config .config;		\
-			 $(obj)/conf -s $(Kconfig);		\
-			 mv -f .config.old.1 .config.old)	\
-	else							\
-			mv -f .tmp.config .config;		\
-			$(obj)/conf -s $(Kconfig);		\
-	fi
-	$(Q)rm -f .tmp.config
-
-localyesconfig: $(obj)/streamline_config.pl $(obj)/conf
-	$(Q)mkdir -p include/generated
-	$(Q)perl $< $(srctree) $(Kconfig) $(LSMOD_F) > .tmp.config
-	$(Q)sed -i s/=m/=y/ .tmp.config
-	$(Q)if [ -f .config ]; then 				\
-			cmp -s .tmp.config .config ||		\
-			(mv -f .config .config.old.1;		\
-			 mv -f .tmp.config .config;		\
-			 $(obj)/conf -s $(Kconfig);		\
-			 mv -f .config.old.1 .config.old)	\
-	else							\
-			mv -f .tmp.config .config;		\
-			$(obj)/conf -s $(Kconfig);		\
-	fi
-	$(Q)rm -f .tmp.config
-
-# Create new linux.pot file
-# Adjust charset to UTF-8 in .po file to accept UTF-8 in Kconfig files
-# The symlink is used to repair a deficiency in arch/um
-update-po-config: $(obj)/kxgettext $(obj)/gconf.glade.h
-	$(Q)echo "  GEN config"
-	$(Q)xgettext --default-domain=linux              \
-	    --add-comments --keyword=_ --keyword=N_      \
-	    --from-code=UTF-8                            \
-	    --files-from=scripts/kconfig/POTFILES.in     \
-	    --output $(obj)/config.pot
-	$(Q)sed -i s/CHARSET/UTF-8/ $(obj)/config.pot
-	$(Q)ln -fs Kconfig.i386 arch/um/Kconfig.arch
-	$(Q)(for i in `ls arch/*/Kconfig`;               \
-	    do                                           \
-		echo "  GEN $$i";                        \
-		$(obj)/kxgettext $$i                     \
-		     >> $(obj)/config.pot;               \
-	    done )
-	$(Q)msguniq --sort-by-file --to-code=UTF-8 $(obj)/config.pot \
-	    --output $(obj)/linux.pot
-	$(Q)rm -f arch/um/Kconfig.arch
-	$(Q)rm -f $(obj)/config.pot
-
-PHONY += randconfig allyesconfig allnoconfig allmodconfig defconfig
-
-randconfig: $(obj)/conf
-	$< -r $(Kconfig)
-
-allyesconfig: $(obj)/conf
-	$< -y $(Kconfig)
-
-allnoconfig: $(obj)/conf
-	$< -n $(Kconfig)
-
-allmodconfig: $(obj)/conf
-	$< -m $(Kconfig)
-
-defconfig: $(obj)/conf
-ifeq ($(KBUILD_DEFCONFIG),)
-	$< -d $(Kconfig)
-else
-	@echo "*** Default configuration is based on '$(KBUILD_DEFCONFIG)'"
-	$(Q)$< -D arch/$(SRCARCH)/configs/$(KBUILD_DEFCONFIG) $(Kconfig)
-endif
-
-%_defconfig: $(obj)/conf
-	$(Q)$< -D arch/$(SRCARCH)/configs/$@ $(Kconfig)
-
-# Help text used by make help
-help:
-	@echo  '  config	  - Update current config utilising a line-oriented program'
-	@echo  '  menuconfig	  - Update current config utilising a menu based program'
-	@echo  '  xconfig	  - Update current config utilising a QT based front-end'
-	@echo  '  gconfig	  - Update current config utilising a GTK based front-end'
-	@echo  '  oldconfig	  - Update current config utilising a provided .config as base'
-	@echo  '  localmodconfig  - Update current config disabling modules not loaded'
-	@echo  '  localyesconfig  - Update current config converting local mods to core'
-	@echo  '  silentoldconfig - Same as oldconfig, but quietly, additionally update deps'
-	@echo  '  randconfig	  - New config with random answer to all options'
-	@echo  '  defconfig	  - New config with default answer to all options'
-	@echo  '  allmodconfig	  - New config selecting modules when possible'
-	@echo  '  allyesconfig	  - New config where all options are accepted with yes'
-	@echo  '  allnoconfig	  - New config where all options are answered with no'
 
 # lxdialog stuff
 check-lxdialog  := $(srctree)/$(src)/lxdialog/check-lxdialog.sh
@@ -305,28 +184,3 @@ $(obj)/lkc_defs.h: $(src)/lkc_proto.h
 $(obj)/gconf.glade.h: $(obj)/gconf.glade
 	intltool-extract --type=gettext/glade $(obj)/gconf.glade
 
-###
-# The following requires flex/bison/gperf
-# By default we use the _shipped versions, uncomment the following line if
-# you are modifying the flex/bison src.
-# LKC_GENPARSER := 1
-
-ifdef LKC_GENPARSER
-
-$(obj)/zconf.tab.c: $(src)/zconf.y
-$(obj)/lex.zconf.c: $(src)/zconf.l
-$(obj)/zconf.hash.c: $(src)/zconf.gperf
-
-%.tab.c: %.y
-	bison -l -b $* -p $(notdir $*) $<
-	cp $@ $@_shipped
-
-lex.%.c: %.l
-	flex -L -P$(notdir $*) -o$@ $<
-	cp $@ $@_shipped
-
-%.hash.c: %.gperf
-	gperf < $< > $@
-	cp $@ $@_shipped
-
-endif
